@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Cincy Remote Work</title>
+<title>Places to Remote Work</title>
 <meta name="description" content="Coffee shops, cafes and bars around Cincinnati worth working from, with hours.">
 <style>
   :root{
@@ -29,14 +29,12 @@
   .wrap{max-width:1040px; margin:0 auto; padding:40px 16px 80px}
   header{margin-bottom:28px}
   h1{font-size:2rem; margin:0 0 6px; letter-spacing:-.01em}
-  .sub{color:var(--muted); margin:0; font-size:.95rem}
   .controls{display:flex; flex-wrap:wrap; gap:10px; margin:24px 0 18px}
-  input[type=search], select{
+  select{
     font:inherit; font-size:.95rem; color:var(--ink); background:var(--panel);
     border:1px solid var(--line); border-radius:8px; padding:9px 12px; min-width:0;
   }
-  input[type=search]{flex:1 1 220px}
-  input[type=search]:focus, select:focus{outline:2px solid var(--accent); outline-offset:1px}
+  select:focus{outline:2px solid var(--accent); outline-offset:1px}
   .toggle{
     display:inline-flex; align-items:center; gap:7px; font-size:.9rem; color:var(--muted);
     background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:9px 12px; cursor:pointer;
@@ -67,7 +65,6 @@
   .hours dt{font-weight:600; letter-spacing:.03em}
   .hours dd{margin:2px 0 0}
   .empty{color:var(--muted); padding:30px 0}
-  footer{margin-top:40px; color:var(--muted); font-size:.85rem}
   @media (max-width:560px){
     .wrap{padding-top:28px}
     h1{font-size:1.6rem}
@@ -78,12 +75,10 @@
 <body>
 <div class="wrap">
   <header>
-    <h1>Cincy Remote Work</h1>
-    <p class="sub">Coffee shops, cafes and bars worth a laptop and a long morning.</p>
+    <h1>Places to Remote Work</h1>
   </header>
 
   <div class="controls">
-    <input type="search" id="q" placeholder="Search a place, a vibe, a street" aria-label="Search">
     <select id="hood" aria-label="Neighborhood"><option value="">All neighborhoods</option></select>
     <label class="toggle"><input type="checkbox" id="now"> Open now</label>
   </div>
@@ -91,7 +86,6 @@
   <p class="count" id="count"></p>
   <ul id="list"></ul>
 
-  <footer>Hours change. Call ahead before you drive.</footer>
 </div>
 
 <script>
@@ -132,28 +126,25 @@ function isOpenNow(place){
 let places = [];
 const list = document.getElementById("list");
 const count = document.getElementById("count");
-const q = document.getElementById("q");
 const hood = document.getElementById("hood");
 const now = document.getElementById("now");
 const todayIdx = (new Date().getDay() + 6) % 7;
 
 function render(){
-  const term = q.value.trim().toLowerCase();
   const h = hood.value;
   const onlyOpen = now.checked;
 
   const shown = places.filter(p => {
     if(h && p.neighborhood !== h) return false;
     if(onlyOpen && !isOpenNow(p)) return false;
-    if(!term) return true;
-    return [p.place, p.atmosphere, p.neighborhood, p.address].join(" ").toLowerCase().includes(term);
+    return true;
   });
 
   count.textContent = shown.length + (shown.length === 1 ? " place" : " places");
   list.innerHTML = "";
 
   if(!shown.length){
-    list.innerHTML = '<li class="empty">Nothing matches. Try fewer words.</li>';
+    list.innerHTML = '<li class="empty">Nothing open right now in that neighborhood.</li>';
     return;
   }
 
@@ -441,7 +432,7 @@ for(const n of [...new Set(places.map(p => p.neighborhood))].sort()){
 }
 render();
 
-for(const el of [q, hood, now]) el.addEventListener("input", render);
+for(const el of [hood, now]) el.addEventListener("input", render);
 </script>
 </body>
 </html>
