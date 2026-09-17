@@ -515,6 +515,13 @@ function hoursList(p){
     `<li class="${i===NOW.idx ? "today" : ""}"><span class="dow">${DAYS[i]}</span> ${t}</li>`).join("");
 }
 
+// Apple Maps opens the app on iPhone and Mac, the web map elsewhere.
+// Addresses that already name a city (Covington, Newport) are across the river.
+function mapQuery(p){
+  const city = p.address.includes(",") ? " KY" : ", Cincinnati OH";
+  return p.place + ", " + p.address + city;
+}
+
 function card(entry, note){
   const p = entry.p;
   return `<li>
@@ -524,7 +531,7 @@ function card(entry, note){
     </div>
     <span class="hood">${p.neighborhood}</span>
     <p class="atmo">${p.atmosphere}</p>
-    <p class="addr"><a href="https://maps.google.com/?q=${encodeURIComponent(p.address + ", Cincinnati OH")}" target="_blank" rel="noopener">${p.address}</a></p>
+    <p class="addr"><a href="https://maps.apple.com/?q=${encodeURIComponent(mapQuery(p))}" target="_blank" rel="noopener">${p.address}</a></p>
     <ul class="hours">${hoursList(p)}</ul>
   </li>`;
 }
