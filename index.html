@@ -2,13 +2,30 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
 <title>Places to Remote Work</title>
-<meta name="description" content="Coffee shops, cafes and bars around Cincinnati worth working from, with hours.">
+<meta name="description" content="Cincinnati remote-work spots, auto-sorted by what's open right now. No controls.">
 <style>
   :root{
     --bg:#faf7f2; --panel:#fff; --line:#e6ded2; --ink:#241f1a; --muted:#7a6f62;
     --accent:#b4531f; --open:#2f7a44; --openbg:#e6f2e9; --shut:#8a8178; --shutbg:#f0ece6;
+
+    /* Type scale — modeled on the iOS/iPadOS Dynamic Type text styles (size/leading
+       ratio kept close to Apple's published "Large" table), in rem so it rides the
+       reader's own browser/OS text-size setting instead of a fixed pixel size. */
+    --fs-large-title:2.125rem;  --lh-large-title:1.21;
+    --fs-title3:1.25rem;        --lh-title3:1.25;
+    --fs-headline:1.0625rem;    --lh-headline:1.29;
+    --fs-body:1rem;             --lh-body:1.3;
+    --fs-subheadline:0.9375rem; --lh-subheadline:1.33;
+    --fs-footnote:0.8125rem;    --lh-footnote:1.38;
+    --fs-caption:0.75rem;       --lh-caption:1.33;
+
+    --w-regular:400; --w-medium:500; --w-semibold:600; --w-bold:700;
+
+    /* Base side margin; safe-area insets are added on top of this, not instead of it. */
+    --side-margin:20px;
   }
   @media (prefers-color-scheme: dark){
     :root:not([data-theme="light"]){
@@ -20,55 +37,109 @@
     --bg:#17140f; --panel:#201c16; --line:#332c23; --ink:#f2ece2; --muted:#a2988a;
     --accent:#e3854a; --open:#7fd39a; --openbg:#1d2f23; --shut:#867c70; --shutbg:#262019;
   }
+
   *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
   body{
     margin:0; background:var(--bg); color:var(--ink);
-    font:16px/1.5 ui-serif, Georgia, "Iowan Old Style", serif;
-    -webkit-text-size-adjust:100%;
+    font-family:-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size:var(--fs-body); line-height:var(--lh-body);
   }
-  .wrap{max-width:1040px; margin:0 auto; padding:40px 16px 80px}
-  header{margin-bottom:28px}
-  h1{font-size:2rem; margin:0 0 6px; letter-spacing:-.01em}
-  .controls{display:flex; flex-wrap:wrap; gap:10px; margin:24px 0 18px}
-  select{
-    font:inherit; font-size:.95rem; color:var(--ink); background:var(--panel);
-    border:1px solid var(--line); border-radius:8px; padding:9px 12px; min-width:0;
+
+  /* Mobile-first: this is the base layout, written for a 390pt-wide phone.
+     The min-width query further down is the adaptation, not the design. */
+  .wrap{
+    max-width:40rem; margin:0 auto;
+    padding-top:calc(env(safe-area-inset-top, 0px) + 28px);
+    padding-bottom:calc(env(safe-area-inset-bottom, 0px) + 56px);
+    padding-left:calc(env(safe-area-inset-left, 0px) + var(--side-margin));
+    padding-right:calc(env(safe-area-inset-right, 0px) + var(--side-margin));
   }
-  select:focus{outline:2px solid var(--accent); outline-offset:1px}
-  .toggle{
-    display:inline-flex; align-items:center; gap:7px; font-size:.9rem; color:var(--muted);
-    background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:9px 12px; cursor:pointer;
+
+  header{margin-bottom:4px}
+  h1{
+    font-size:var(--fs-large-title); line-height:var(--lh-large-title);
+    font-weight:var(--w-bold); letter-spacing:-.015em; margin:0 0 6px;
   }
-  .count{color:var(--muted); font-size:.85rem; margin:0 0 14px}
-  ul{list-style:none; margin:0; padding:0; display:grid; gap:12px}
-  li{
-    background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:16px 18px;
+  .status{
+    font-size:var(--fs-subheadline); line-height:var(--lh-subheadline);
+    color:var(--muted); margin:0 0 8px;
   }
-  .top{display:flex; flex-wrap:wrap; align-items:baseline; gap:10px}
-  .name{font-size:1.15rem; font-weight:600; margin:0}
-  .badge{
-    font-family:ui-sans-serif, system-ui, sans-serif; font-size:.72rem; letter-spacing:.04em;
-    text-transform:uppercase; padding:3px 8px; border-radius:20px; white-space:nowrap;
+
+  h2.tier{
+    font-size:var(--fs-footnote); line-height:var(--lh-footnote);
+    font-weight:var(--w-bold); letter-spacing:.06em; text-transform:uppercase;
+    margin:0 0 12px; padding-top:28px; border-top:1px solid var(--line);
   }
-  .badge.open{color:var(--open); background:var(--openbg)}
-  .badge.shut{color:var(--shut); background:var(--shutbg)}
-  .hood{color:var(--accent); font-size:.9rem}
-  .atmo{margin:6px 0 0; color:var(--ink)}
-  .addr{margin:4px 0 0; font-size:.9rem}
-  .addr a{color:var(--muted)}
-  .hours{
-    margin:12px 0 0; padding:0; display:grid; grid-template-columns:repeat(7,1fr); gap:4px;
-    font-family:ui-sans-serif, system-ui, sans-serif; font-size:.74rem; text-align:center;
+  section:first-of-type h2.tier{border-top:none; padding-top:22px}
+  h2.tier.open-h{color:var(--open)}
+  h2.tier.later-h{color:var(--accent)}
+  h2.tier.closed-h{color:var(--shut)}
+
+  ul.cards{list-style:none; margin:0; padding:0; display:grid; gap:12px}
+  ul.cards > li{
+    background:var(--panel); border:1px solid var(--line); border-radius:14px;
+    padding:16px 18px 18px;
   }
-  .hours div{border:1px solid var(--line); border-radius:6px; padding:5px 2px; color:var(--muted)}
-  .hours div.today{border-color:var(--accent); color:var(--ink)}
-  .hours dt{font-weight:600; letter-spacing:.03em}
-  .hours dd{margin:2px 0 0}
-  .empty{color:var(--muted); padding:30px 0}
-  @media (max-width:560px){
-    .wrap{padding-top:28px}
-    h1{font-size:1.6rem}
-    .hours{grid-template-columns:repeat(4,1fr)}
+
+  .top{display:flex; flex-wrap:wrap; align-items:baseline; gap:6px 10px}
+  .name{
+    font-size:var(--fs-headline); line-height:var(--lh-headline);
+    font-weight:var(--w-semibold); margin:0;
+  }
+  .note{
+    font-size:var(--fs-footnote); line-height:var(--lh-footnote);
+    font-weight:var(--w-medium); color:var(--accent);
+  }
+  .hood{
+    display:block; font-size:var(--fs-subheadline); line-height:var(--lh-subheadline);
+    color:var(--accent); margin:2px 0 0;
+  }
+  .atmo{
+    font-size:var(--fs-body); line-height:var(--lh-body);
+    color:var(--ink); margin:8px 0 0;
+  }
+  .addr{margin:6px 0 0}
+  .addr a{
+    display:inline-block; color:var(--muted); text-decoration:underline;
+    text-underline-offset:2px; font-size:var(--fs-footnote); line-height:var(--lh-footnote);
+    /* Invisible touch-target expansion: padding grows the tap area to 44pt tall
+       without shifting surrounding layout (offsetting margin cancels it visually). */
+    padding:14px 6px; margin:-14px -6px;
+  }
+
+  ul.hours{
+    list-style:none; margin:14px 0 0; padding:12px 0 0; border-top:1px solid var(--line);
+    display:flex; flex-wrap:wrap; gap:7px 16px;
+    font-size:var(--fs-caption); line-height:var(--lh-caption); color:var(--muted);
+  }
+  ul.hours li{white-space:nowrap}
+  ul.hours .dow{font-weight:var(--w-semibold)}
+  ul.hours li.today{
+    color:var(--ink); font-weight:var(--w-semibold);
+    text-decoration:underline; text-underline-offset:3px;
+  }
+
+  ul.closed-list{list-style:none; margin:0; padding:0; display:grid; gap:10px}
+  ul.closed-list li{
+    font-size:var(--fs-footnote); line-height:var(--lh-footnote); color:var(--muted);
+  }
+  ul.closed-list .cname{color:var(--ink); font-weight:var(--w-medium)}
+  ul.closed-list .chood{color:var(--accent)}
+
+  .footnote{
+    margin-top:32px; padding-top:18px; border-top:1px solid var(--line);
+    font-size:var(--fs-footnote); line-height:var(--lh-footnote); color:var(--muted);
+  }
+  .footnote strong{color:var(--ink); font-weight:var(--w-semibold)}
+
+  /* Laptop is the adaptation: roomier margins and a touch more breathing room,
+     not a different structure and not a multi-column card grid — a single
+     comfortably-measured reading column stays correct at any width. */
+  @media (min-width:700px){
+    :root{--side-margin:32px}
+    .wrap{padding-top:calc(env(safe-area-inset-top, 0px) + 48px)}
+    ul.cards > li{padding:20px 24px 22px}
   }
 </style>
 </head>
@@ -76,16 +147,12 @@
 <div class="wrap">
   <header>
     <h1>Places to Remote Work</h1>
+    <p class="status" id="status"></p>
   </header>
 
-  <div class="controls">
-    <select id="hood" aria-label="Neighborhood"><option value="">All neighborhoods</option></select>
-    <label class="toggle"><input type="checkbox" id="now"> Open now</label>
-  </div>
+  <div id="content"></div>
 
-  <p class="count" id="count"></p>
-  <ul id="list"></ul>
-
+  <p class="footnote" id="footnote"></p>
 </div>
 
 <script>
@@ -100,70 +167,70 @@ function toMinutes(t){
   return h*60 + (m[2] ? parseInt(m[2],10) : 0);
 }
 
-// Is `text` ("7a–9p", "Closed", "3p–2:30a") open at `min` minutes on that day?
-function openAt(text, min){
+// "7a–9p" -> {a,b,spans}; null if not a plain two-time range (e.g. "Closed", "N/A", "2nd Sat only")
+function parseRange(text){
   const parts = text.split(/[–-]/);
-  if(parts.length !== 2) return false;
+  if(parts.length !== 2) return null;
   const a = toMinutes(parts[0]), b = toMinutes(parts[1]);
-  if(a === null || b === null) return false;
-  return b > a ? (min >= a && min < b) : (min >= a || min < b); // b < a means past midnight
+  if(a === null || b === null) return null;
+  return { a, b, spans: b < a }; // spans === past midnight
 }
 
-function isOpenNow(place){
-  const d = new Date();
-  const idx = (d.getDay() + 6) % 7;            // JS Sunday=0 -> our Monday=0
-  const min = d.getHours()*60 + d.getMinutes();
-  if(openAt(place.hours[idx], min)) return true;
-  const prev = (idx + 6) % 7;                   // spillover from last night
-  const p = place.hours[prev].split(/[–-]/);
-  if(p.length === 2){
-    const a = toMinutes(p[0]), b = toMinutes(p[1]);
-    if(a !== null && b !== null && b < a && min < b) return true;
-  }
-  return false;
-}
-
-let places = [];
-const list = document.getElementById("list");
-const count = document.getElementById("count");
-const hood = document.getElementById("hood");
-const now = document.getElementById("now");
-const todayIdx = (new Date().getDay() + 6) % 7;
-
-function render(){
-  const h = hood.value;
-  const onlyOpen = now.checked;
-
-  const shown = places.filter(p => {
-    if(h && p.neighborhood !== h) return false;
-    if(onlyOpen && !isOpenNow(p)) return false;
-    return true;
+// Cincinnati "now", hardcoded to America/New_York regardless of the viewer's own clock/timezone
+function nowInCincinnati(){
+  const fmt = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York", weekday: "short",
+    hour: "2-digit", minute: "2-digit", hourCycle: "h23"
   });
+  const parts = Object.fromEntries(fmt.formatToParts(new Date()).map(p => [p.type, p.value]));
+  const idx = DAYS.indexOf(parts.weekday);
+  const min = parseInt(parts.hour, 10) * 60 + parseInt(parts.minute, 10);
+  return { idx, min };
+}
 
-  count.textContent = shown.length + (shown.length === 1 ? " place" : " places");
-  list.innerHTML = "";
+function fmtClock(min){
+  min = ((min % 1440) + 1440) % 1440;
+  let h = Math.floor(min/60), m = min%60;
+  const ap = h >= 12 ? "pm" : "am";
+  h = h % 12; if(h === 0) h = 12;
+  return `${h}:${String(m).padStart(2,"0")}${ap}`;
+}
 
-  if(!shown.length){
-    list.innerHTML = '<li class="empty">Nothing open right now in that neighborhood.</li>';
-    return;
+function fmtDur(min){
+  const h = Math.floor(min/60), m = min%60;
+  if(h === 0) return `${m} min`;
+  if(m === 0) return `${h}h`;
+  return `${h}h ${m}m`;
+}
+
+// Classify one place against "now": open (with remaining minutes), later-today (with wait),
+// or closed-today (with the next day/time it opens, searched forward up to 6 days).
+function classify(place, idx, min){
+  const today = parseRange(place.hours[idx]);
+  const yestIdx = (idx + 6) % 7;
+  const yest = parseRange(place.hours[yestIdx]);
+
+  // still open from last night's overnight window spilling into this morning
+  if(yest && yest.spans && min < yest.b){
+    return { status: "open", remaining: yest.b - min };
   }
-
-  for(const p of shown){
-    const open = isOpenNow(p);
-    const li = document.createElement("li");
-    const days = p.hours.map((t,i) =>
-      `<div class="${i===todayIdx ? "today" : ""}"><dt>${DAYS[i]}</dt><dd>${t}</dd></div>`).join("");
-    li.innerHTML = `
-      <div class="top">
-        <h2 class="name">${p.place}</h2>
-        <span class="badge ${open ? "open" : "shut"}">${open ? "Open now" : "Closed now"}</span>
-        <span class="hood">${p.neighborhood}</span>
-      </div>
-      <p class="atmo">${p.atmosphere}</p>
-      <p class="addr"><a href="https://maps.google.com/?q=${encodeURIComponent(p.address + ", Cincinnati OH")}" target="_blank" rel="noopener">${p.address}</a></p>
-      <dl class="hours">${days}</dl>`;
-    list.appendChild(li);
+  if(today){
+    if(!today.spans && min >= today.a && min < today.b){
+      return { status: "open", remaining: today.b - min };
+    }
+    if(today.spans && min >= today.a){
+      return { status: "open", remaining: (1440 - min) + today.b };
+    }
+    if(min < today.a){
+      return { status: "later", wait: today.a - min, at: today.a };
+    }
   }
+  for(let d = 1; d <= 6; d++){
+    const j = (idx + d) % 7;
+    const r = parseRange(place.hours[j]);
+    if(r){ return { status: "closed", nextDay: DAYS[j], nextAt: r.a }; }
+  }
+  return { status: "closed", nextDay: null, nextAt: null };
 }
 
 const DATA = [
@@ -173,13 +240,13 @@ const DATA = [
   "neighborhood": "Corryville",
   "address": "2900 Jefferson Ave",
   "hours": [
-   "7a\u20139p",
-   "7a\u20139p",
-   "7a\u20139p",
-   "7a\u20139p",
-   "7a\u20139p",
-   "8a\u20139p",
-   "2p\u20139p"
+   "7a–9p",
+   "7a–9p",
+   "7a–9p",
+   "7a–9p",
+   "7a–9p",
+   "8a–9p",
+   "2p–9p"
   ]
  },
  {
@@ -188,13 +255,13 @@ const DATA = [
   "neighborhood": "Covington",
   "address": "324 W Pike St, Covington",
   "hours": [
-   "6:30a\u20134p",
-   "6:30a\u20134p",
-   "6:30a\u20134p",
-   "6:30a\u20134p",
-   "6:30a\u20134p",
-   "7:30a\u20134p",
-   "7:30a\u20134p"
+   "6:30a–4p",
+   "6:30a–4p",
+   "6:30a–4p",
+   "6:30a–4p",
+   "6:30a–4p",
+   "7:30a–4p",
+   "7:30a–4p"
   ]
  },
  {
@@ -203,27 +270,27 @@ const DATA = [
   "neighborhood": "Over-the-Rhine",
   "address": "1215 Vine St",
   "hours": [
-   "7:30a\u20138p",
-   "7:30a\u20138p",
-   "7:30a\u20138p",
-   "7:30a\u20138p",
-   "7:30a\u201310p",
-   "8a\u201310p",
+   "7:30a–8p",
+   "7:30a–8p",
+   "7:30a–8p",
+   "7:30a–8p",
+   "7:30a–10p",
+   "8a–10p",
    "Closed"
   ]
  },
  {
-  "place": "All\u00e9z Cafe (Madisonville)",
+  "place": "Alléz Cafe (Madisonville)",
   "atmosphere": "beautiful revamped old-bones cafe",
   "neighborhood": "Madisonville",
   "address": "6012 Madison Rd",
   "hours": [
    "Closed",
-   "8a\u20133p",
-   "8a\u20133p",
-   "8a\u20133p",
-   "8a\u20133p",
-   "8a\u20133p",
+   "8a–3p",
+   "8a–3p",
+   "8a–3p",
+   "8a–3p",
+   "8a–3p",
    "Closed"
   ]
  },
@@ -233,13 +300,13 @@ const DATA = [
   "neighborhood": "Norwood",
   "address": "4030 Forest Ave",
   "hours": [
-   "6:30a\u20134p",
-   "6:30a\u20134p",
-   "6:30a\u20134p",
-   "6:30a\u20134p",
-   "6:30a\u20134p",
-   "8a\u20134p",
-   "8a\u20132:30p"
+   "6:30a–4p",
+   "6:30a–4p",
+   "6:30a–4p",
+   "6:30a–4p",
+   "6:30a–4p",
+   "8a–4p",
+   "8a–2:30p"
   ]
  },
  {
@@ -249,12 +316,12 @@ const DATA = [
   "address": "953 Eden Park Dr",
   "hours": [
    "Closed",
-   "11a\u20133p",
-   "11a\u20133p",
-   "11a\u20137:30p",
-   "11a\u20133p",
-   "11a\u20133p",
-   "11a\u20133p"
+   "11a–3p",
+   "11a–3p",
+   "11a–7:30p",
+   "11a–3p",
+   "11a–3p",
+   "11a–3p"
   ]
  },
  {
@@ -264,10 +331,10 @@ const DATA = [
   "address": "953 Eden Park Dr",
   "hours": [
    "Closed",
-   "11a\u20135p",
-   "11a\u20135p",
-   "11a\u20135p",
-   "11a\u20135p",
+   "11a–5p",
+   "11a–5p",
+   "11a–5p",
+   "11a–5p",
    "2nd Sat only",
    "Closed"
   ]
@@ -278,13 +345,13 @@ const DATA = [
   "neighborhood": "Over-the-Rhine",
   "address": "110 E Central Pkwy",
   "hours": [
-   "6:30a\u20134p",
-   "6:30a\u20134p",
-   "6:30a\u20134p",
-   "6:30a\u20134p",
-   "6:30a\u20134p",
-   "7a\u20134p",
-   "7a\u20134p"
+   "6:30a–4p",
+   "6:30a–4p",
+   "6:30a–4p",
+   "6:30a–4p",
+   "6:30a–4p",
+   "7a–4p",
+   "7a–4p"
   ]
  },
  {
@@ -293,13 +360,13 @@ const DATA = [
   "neighborhood": "Over-the-Rhine",
   "address": "207 Woodward St",
   "hours": [
-   "7a\u20134p",
-   "7a\u20134p",
-   "7a\u20134p",
-   "7a\u20134p",
-   "7a\u20134p",
-   "8a\u20134p",
-   "8a\u20134p"
+   "7a–4p",
+   "7a–4p",
+   "7a–4p",
+   "7a–4p",
+   "7a–4p",
+   "8a–4p",
+   "8a–4p"
   ]
  },
  {
@@ -308,13 +375,13 @@ const DATA = [
   "neighborhood": "Downtown",
   "address": "600 Main St",
   "hours": [
-   "6:30a\u20137p",
-   "6:30a\u20137p",
-   "6:30a\u20137p",
-   "6:30a\u20137p",
-   "6:30a\u20137p",
-   "6:30a\u20137p",
-   "6:30a\u20137p"
+   "6:30a–7p",
+   "6:30a–7p",
+   "6:30a–7p",
+   "6:30a–7p",
+   "6:30a–7p",
+   "6:30a–7p",
+   "6:30a–7p"
   ]
  },
  {
@@ -323,13 +390,13 @@ const DATA = [
   "neighborhood": "Clifton",
   "address": "2839 Highland Ave",
   "hours": [
-   "3p\u20132:30a",
-   "3p\u20132:30a",
-   "3p\u20132:30a",
-   "3p\u20132:30a",
-   "3p\u20132:30a",
-   "1p\u20132:30a",
-   "1p\u20132:30a"
+   "3p–2:30a",
+   "3p–2:30a",
+   "3p–2:30a",
+   "3p–2:30a",
+   "3p–2:30a",
+   "1p–2:30a",
+   "1p–2:30a"
   ]
  },
  {
@@ -338,13 +405,13 @@ const DATA = [
   "neighborhood": "Newport",
   "address": "400 York St, Newport",
   "hours": [
-   "6:30a\u20133:30p",
-   "6:30a\u20133:30p",
-   "6:30a\u20133:30p",
-   "6:30a\u20133:30p",
-   "6:30a\u20133:30p",
-   "6:30a\u20133:30p",
-   "6:30a\u20133:30p"
+   "6:30a–3:30p",
+   "6:30a–3:30p",
+   "6:30a–3:30p",
+   "6:30a–3:30p",
+   "6:30a–3:30p",
+   "6:30a–3:30p",
+   "6:30a–3:30p"
   ]
  },
  {
@@ -353,12 +420,12 @@ const DATA = [
   "neighborhood": "Mt. Auburn",
   "address": "1833 Sycamore St",
   "hours": [
-   "7a\u20137p",
-   "7a\u20137p",
-   "7a\u20137p",
-   "7a\u20137p",
-   "7a\u20137p",
-   "7a\u20137p",
+   "7a–7p",
+   "7a–7p",
+   "7a–7p",
+   "7a–7p",
+   "7a–7p",
+   "7a–7p",
    "Closed"
   ]
  },
@@ -383,13 +450,13 @@ const DATA = [
   "neighborhood": "Over-the-Rhine",
   "address": "229 W 12th St",
   "hours": [
-   "8a\u20136p",
-   "8a\u20136p",
-   "8a\u20136p",
-   "8a\u201311p",
-   "8a\u201311p",
-   "8a\u201311p",
-   "8a\u201310p"
+   "8a–6p",
+   "8a–6p",
+   "8a–6p",
+   "8a–11p",
+   "8a–11p",
+   "8a–11p",
+   "8a–10p"
   ]
  },
  {
@@ -400,11 +467,11 @@ const DATA = [
   "hours": [
    "Closed",
    "Closed",
-   "4p\u201311p",
-   "4p\u201311p",
-   "4p\u201311p",
-   "4p\u201311p",
-   "2p\u20139p"
+   "4p–11p",
+   "4p–11p",
+   "4p–11p",
+   "4p–11p",
+   "2p–9p"
   ]
  },
  {
@@ -413,26 +480,84 @@ const DATA = [
   "neighborhood": "Pendleton",
   "address": "1130 Broadway",
   "hours": [
-   "7a\u20135p",
-   "7a\u20135p",
-   "7a\u20135p",
-   "7a\u20135p",
-   "7a\u20135p",
-   "8a\u20135p",
-   "8a\u20135p"
+   "7a–5p",
+   "7a–5p",
+   "7a–5p",
+   "7a–5p",
+   "7a–5p",
+   "8a–5p",
+   "8a–5p"
   ]
  }
 ];
 
-places = DATA.sort((a,b) => a.place.localeCompare(b.place));
-for(const n of [...new Set(places.map(p => p.neighborhood))].sort()){
-  const o = document.createElement("option");
-  o.value = o.textContent = n;
-  hood.appendChild(o);
-}
-render();
+const NOW = nowInCincinnati();
 
-for(const el of [hood, now]) el.addEventListener("input", render);
+const porch = DATA.find(p => p.hours.every(h => h === "N/A"));
+const real = DATA.filter(p => p !== porch);
+
+const openNow = [], later = [], closed = [];
+for(const p of real){
+  const c = classify(p, NOW.idx, NOW.min);
+  if(c.status === "open") openNow.push({ p, ...c });
+  else if(c.status === "later") later.push({ p, ...c });
+  else closed.push({ p, ...c });
+}
+openNow.sort((a,b) => b.remaining - a.remaining);   // most runway first
+later.sort((a,b) => a.wait - b.wait);               // soonest opening first
+closed.sort((a,b) => a.p.place.localeCompare(b.p.place));
+
+document.getElementById("status").textContent =
+  `${openNow.length} open right now · ${DAYS[NOW.idx]} ${fmtClock(NOW.min)}`;
+
+function hoursList(p){
+  return p.hours.map((t,i) =>
+    `<li class="${i===NOW.idx ? "today" : ""}"><span class="dow">${DAYS[i]}</span> ${t}</li>`).join("");
+}
+
+function card(entry, note){
+  const p = entry.p;
+  return `<li>
+    <div class="top">
+      <h3 class="name">${p.place}</h3>
+      ${note ? `<span class="note">${note}</span>` : ""}
+    </div>
+    <span class="hood">${p.neighborhood}</span>
+    <p class="atmo">${p.atmosphere}</p>
+    <p class="addr"><a href="https://maps.google.com/?q=${encodeURIComponent(p.address + ", Cincinnati OH")}" target="_blank" rel="noopener">${p.address}</a></p>
+    <ul class="hours">${hoursList(p)}</ul>
+  </li>`;
+}
+
+let html = "";
+
+if(openNow.length){
+  html += `<section><h2 class="tier open-h">Open now</h2><ul class="cards">`;
+  html += openNow.map(e => card(e, e.remaining < 60 ? `closes in ${fmtDur(e.remaining)}` : "")).join("");
+  html += `</ul></section>`;
+}
+
+if(later.length){
+  html += `<section><h2 class="tier later-h">Opening later today</h2><ul class="cards">`;
+  html += later.map(e => card(e, `opens in ${fmtDur(e.wait)} · ${fmtClock(e.at)}`)).join("");
+  html += `</ul></section>`;
+}
+
+if(closed.length){
+  html += `<section><h2 class="tier closed-h">Closed today</h2><ul class="closed-list">`;
+  html += closed.map(e => {
+    const next = e.nextDay ? `opens ${e.nextDay} ${fmtClock(e.nextAt)}` : "hours unclear";
+    return `<li><span class="cname">${e.p.place}</span> — <span class="chood">${e.p.neighborhood}</span> — ${next}</li>`;
+  }).join("");
+  html += `</ul></section>`;
+}
+
+document.getElementById("content").innerHTML = html;
+
+if(porch){
+  document.getElementById("footnote").innerHTML =
+    `<strong>${porch.place}</strong> (${porch.neighborhood}) has no listed hours — not sorted into any tier above. ${porch.atmosphere}.`;
+}
 </script>
 </body>
 </html>
