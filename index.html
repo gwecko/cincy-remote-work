@@ -131,7 +131,27 @@
     margin-top:32px; padding-top:18px; border-top:1px solid var(--line);
     font-size:var(--fs-footnote); line-height:var(--lh-footnote); color:var(--muted);
   }
+  .footnote:empty{display:none}
   .footnote strong{color:var(--ink); font-weight:var(--w-semibold)}
+
+  /* One control, sized to Apple's 44pt minimum touch target. A native select
+     is deliberate: it gets the system picker, VoiceOver and Dynamic Type for free. */
+  .filter{margin:14px 0 4px}
+  .filter select{
+    -webkit-appearance:none; appearance:none;
+    font:inherit; font-size:var(--fs-subheadline); color:var(--ink);
+    background:var(--panel); border:1px solid var(--line); border-radius:12px;
+    min-height:44px; width:100%; padding:0 40px 0 14px;
+    background-image:linear-gradient(45deg, transparent 50%, var(--muted) 50%),
+                     linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+    background-position:calc(100% - 20px) 50%, calc(100% - 14px) 50%;
+    background-size:6px 6px, 6px 6px; background-repeat:no-repeat;
+  }
+  .filter select:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+  .sr-only{
+    position:absolute; width:1px; height:1px; overflow:hidden;
+    clip-path:inset(50%); white-space:nowrap;
+  }
 
   /* Laptop is the adaptation: roomier margins and a touch more breathing room,
      not a different structure and not a multi-column card grid — a single
@@ -149,6 +169,11 @@
     <h1>Places to Remote Work</h1>
     <p class="status" id="status"></p>
   </header>
+
+  <div class="filter">
+    <label class="sr-only" for="hood">Neighborhood</label>
+    <select id="hood"><option value="">All neighborhoods</option></select>
+  </div>
 
   <div id="content"></div>
 
@@ -496,19 +521,12 @@ const NOW = nowInCincinnati();
 const porch = DATA.find(p => p.hours.every(h => h === "N/A"));
 const real = DATA.filter(p => p !== porch);
 
-const openNow = [], later = [], closed = [];
-for(const p of real){
-  const c = classify(p, NOW.idx, NOW.min);
-  if(c.status === "open") openNow.push({ p, ...c });
-  else if(c.status === "later") later.push({ p, ...c });
-  else closed.push({ p, ...c });
+const hoodSelect = document.getElementById("hood");
+for(const n of [...new Set(DATA.map(p => p.neighborhood))].sort()){
+  const o = document.createElement("option");
+  o.value = o.textContent = n;
+  hoodSelect.appendChild(o);
 }
-openNow.sort((a,b) => b.remaining - a.remaining);   // most runway first
-later.sort((a,b) => a.wait - b.wait);               // soonest opening first
-closed.sort((a,b) => a.p.place.localeCompare(b.p.place));
-
-document.getElementById("status").textContent =
-  `${openNow.length} open right now · ${DAYS[NOW.idx]} ${fmtClock(NOW.min)}`;
 
 function hoursList(p){
   return p.hours.map((t,i) =>
@@ -536,35 +554,63 @@ function card(entry, note){
   </li>`;
 }
 
-let html = "";
+function render(){
+  const hood = hoodSelect.value;
+  const inScope = p => !hood || p.neighborhood === hood;
 
-if(openNow.length){
-  html += `<section><h2 class="tier open-h">Open now</h2><ul class="cards">`;
-  html += openNow.map(e => card(e, e.remaining < 60 ? `closes in ${fmtDur(e.remaining)}` : "")).join("");
-  html += `</ul></section>`;
+  const openNow = [], later = [], closed = [];
+  for(const p of real.filter(inScope)){
+    const c = classify(p, NOW.idx, NOW.min);
+    if(c.status === "open") openNow.push({ p, ...c });
+    else if(c.status === "later") later.push({ p, ...c });
+    else closed.push({ p, ...c });
+  }
+  openNow.sort((a,b) => b.remaining - a.remaining);   // most runway first
+  later.sort((a,b) => a.wait - b.wait);               // soonest opening first
+  closed.sort((a,b) => a.p.place.localeCompare(b.p.place));
+
+  const where = hood ? ` in ${hood}` : "";
+  document.getElementById("status").textContent =
+    `${openNow.length} open right now${where} · ${DAYS[NOW.idx]} ${fmtClock(NOW.min)}`;
+
+  let html = "";
+
+  if(openNow.length){
+    html += `<section><h2 class="tier open-h">Open now</h2><ul class="cards">`;
+    html += openNow.map(e => card(e, e.remaining < 60 ? `closes in ${fmtDur(e.remaining)}` : "")).join("");
+    html += `</ul></section>`;
+  }
+
+  if(later.length){
+    html += `<section><h2 class="tier later-h">Opening later today</h2><ul class="cards">`;
+    html += later.map(e => card(e, `opens in ${fmtDur(e.wait)} · ${fmtClock(e.at)}`)).join("");
+    html += `</ul></section>`;
+  }
+
+  if(closed.length){
+    html += `<section><h2 class="tier closed-h">Closed today</h2><ul class="closed-list">`;
+    html += closed.map(e => {
+      const next = e.nextDay ? `opens ${e.nextDay} ${fmtClock(e.nextAt)}` : "hours unclear";
+      return `<li><span class="cname">${e.p.place}</span> — <span class="chood">${e.p.neighborhood}</span> — ${next}</li>`;
+    }).join("");
+    html += `</ul></section>`;
+  }
+
+  document.getElementById("content").innerHTML = html;
+
+  // The Porch has no listed hours, so it sits outside the tiers — shown only when
+  // the current filter would include it.
+  const foot = document.getElementById("footnote");
+  if(porch && inScope(porch)){
+    foot.innerHTML =
+      `<strong>${porch.place}</strong> (${porch.neighborhood}) has no listed hours — not sorted into any tier above. ${porch.atmosphere}.`;
+  } else {
+    foot.innerHTML = "";
+  }
 }
 
-if(later.length){
-  html += `<section><h2 class="tier later-h">Opening later today</h2><ul class="cards">`;
-  html += later.map(e => card(e, `opens in ${fmtDur(e.wait)} · ${fmtClock(e.at)}`)).join("");
-  html += `</ul></section>`;
-}
-
-if(closed.length){
-  html += `<section><h2 class="tier closed-h">Closed today</h2><ul class="closed-list">`;
-  html += closed.map(e => {
-    const next = e.nextDay ? `opens ${e.nextDay} ${fmtClock(e.nextAt)}` : "hours unclear";
-    return `<li><span class="cname">${e.p.place}</span> — <span class="chood">${e.p.neighborhood}</span> — ${next}</li>`;
-  }).join("");
-  html += `</ul></section>`;
-}
-
-document.getElementById("content").innerHTML = html;
-
-if(porch){
-  document.getElementById("footnote").innerHTML =
-    `<strong>${porch.place}</strong> (${porch.neighborhood}) has no listed hours — not sorted into any tier above. ${porch.atmosphere}.`;
-}
+hoodSelect.addEventListener("change", render);
+render();
 </script>
 </body>
 </html>
