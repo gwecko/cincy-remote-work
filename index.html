@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cincy Remote Work</title>
+<meta name="description" content="Coffee shops, cafes and bars around Cincinnati worth working from, with hours.">
+<style>
+  :root{
+    --bg:#faf7f2; --panel:#fff; --line:#e6ded2; --ink:#241f1a; --muted:#7a6f62;
+    --accent:#b4531f; --open:#2f7a44; --openbg:#e6f2e9; --shut:#8a8178; --shutbg:#f0ece6;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#17140f; --panel:#201c16; --line:#332c23; --ink:#f2ece2; --muted:#a2988a;
+      --accent:#e3854a; --open:#7fd39a; --openbg:#1d2f23; --shut:#867c70; --shutbg:#262019;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#17140f; --panel:#201c16; --line:#332c23; --ink:#f2ece2; --muted:#a2988a;
+    --accent:#e3854a; --open:#7fd39a; --openbg:#1d2f23; --shut:#867c70; --shutbg:#262019;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font:16px/1.5 ui-serif, Georgia, "Iowan Old Style", serif;
+    -webkit-text-size-adjust:100%;
+  }
+  .wrap{max-width:1040px; margin:0 auto; padding:40px 16px 80px}
+  header{margin-bottom:28px}
+  h1{font-size:2rem; margin:0 0 6px; letter-spacing:-.01em}
+  .sub{color:var(--muted); margin:0; font-size:.95rem}
+  .controls{display:flex; flex-wrap:wrap; gap:10px; margin:24px 0 18px}
+  input[type=search], select{
+    font:inherit; font-size:.95rem; color:var(--ink); background:var(--panel);
+    border:1px solid var(--line); border-radius:8px; padding:9px 12px; min-width:0;
+  }
+  input[type=search]{flex:1 1 220px}
+  input[type=search]:focus, select:focus{outline:2px solid var(--accent); outline-offset:1px}
+  .toggle{
+    display:inline-flex; align-items:center; gap:7px; font-size:.9rem; color:var(--muted);
+    background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:9px 12px; cursor:pointer;
+  }
+  .count{color:var(--muted); font-size:.85rem; margin:0 0 14px}
+  ul{list-style:none; margin:0; padding:0; display:grid; gap:12px}
+  li{
+    background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:16px 18px;
+  }
+  .top{display:flex; flex-wrap:wrap; align-items:baseline; gap:10px}
+  .name{font-size:1.15rem; font-weight:600; margin:0}
+  .badge{
+    font-family:ui-sans-serif, system-ui, sans-serif; font-size:.72rem; letter-spacing:.04em;
+    text-transform:uppercase; padding:3px 8px; border-radius:20px; white-space:nowrap;
+  }
+  .badge.open{color:var(--open); background:var(--openbg)}
+  .badge.shut{color:var(--shut); background:var(--shutbg)}
+  .hood{color:var(--accent); font-size:.9rem}
+  .atmo{margin:6px 0 0; color:var(--ink)}
+  .addr{margin:4px 0 0; font-size:.9rem}
+  .addr a{color:var(--muted)}
+  .hours{
+    margin:12px 0 0; padding:0; display:grid; grid-template-columns:repeat(7,1fr); gap:4px;
+    font-family:ui-sans-serif, system-ui, sans-serif; font-size:.74rem; text-align:center;
+  }
+  .hours div{border:1px solid var(--line); border-radius:6px; padding:5px 2px; color:var(--muted)}
+  .hours div.today{border-color:var(--accent); color:var(--ink)}
+  .hours dt{font-weight:600; letter-spacing:.03em}
+  .hours dd{margin:2px 0 0}
+  .empty{color:var(--muted); padding:30px 0}
+  footer{margin-top:40px; color:var(--muted); font-size:.85rem}
+  @media (max-width:560px){
+    .wrap{padding-top:28px}
+    h1{font-size:1.6rem}
+    .hours{grid-template-columns:repeat(4,1fr)}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Cincy Remote Work</h1>
+    <p class="sub">Coffee shops, cafes and bars worth a laptop and a long morning.</p>
+  </header>
+
+  <div class="controls">
+    <input type="search" id="q" placeholder="Search a place, a vibe, a street" aria-label="Search">
+    <select id="hood" aria-label="Neighborhood"><option value="">All neighborhoods</option></select>
+    <label class="toggle"><input type="checkbox" id="now"> Open now</label>
+  </div>
+
+  <p class="count" id="count"></p>
+  <ul id="list"></ul>
+
+  <footer>Hours change. Call ahead before you drive.</footer>
+</div>
+
+<script>
+const DAYS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+
+// "6:30a", "7p" -> minutes past midnight
+function toMinutes(t){
+  const m = /^(\d{1,2})(?::(\d{2}))?([ap])$/.exec(t.trim());
+  if(!m) return null;
+  let h = parseInt(m[1],10) % 12;
+  if(m[3] === "p") h += 12;
+  return h*60 + (m[2] ? parseInt(m[2],10) : 0);
+}
+
+// Is `text` ("7a–9p", "Closed", "3p–2:30a") open at `min` minutes on that day?
+function openAt(text, min){
+  const parts = text.split(/[–-]/);
+  if(parts.length !== 2) return false;
+  const a = toMinutes(parts[0]), b = toMinutes(parts[1]);
+  if(a === null || b === null) return false;
+  return b > a ? (min >= a && min < b) : (min >= a || min < b); // b < a means past midnight
+}
+
+function isOpenNow(place){
+  const d = new Date();
+  const idx = (d.getDay() + 6) % 7;            // JS Sunday=0 -> our Monday=0
+  const min = d.getHours()*60 + d.getMinutes();
+  if(openAt(place.hours[idx], min)) return true;
+  const prev = (idx + 6) % 7;                   // spillover from last night
+  const p = place.hours[prev].split(/[–-]/);
+  if(p.length === 2){
+    const a = toMinutes(p[0]), b = toMinutes(p[1]);
+    if(a !== null && b !== null && b < a && min < b) return true;
+  }
+  return false;
+}
+
+let places = [];
+const list = document.getElementById("list");
+const count = document.getElementById("count");
+const q = document.getElementById("q");
+const hood = document.getElementById("hood");
+const now = document.getElementById("now");
+const todayIdx = (new Date().getDay() + 6) % 7;
+
+function render(){
+  const term = q.value.trim().toLowerCase();
+  const h = hood.value;
+  const onlyOpen = now.checked;
+
+  const shown = places.filter(p => {
+    if(h && p.neighborhood !== h) return false;
+    if(onlyOpen && !isOpenNow(p)) return false;
+    if(!term) return true;
+    return [p.place, p.atmosphere, p.neighborhood, p.address].join(" ").toLowerCase().includes(term);
+  });
+
+  count.textContent = shown.length + (shown.length === 1 ? " place" : " places");
+  list.innerHTML = "";
+
+  if(!shown.length){
+    list.innerHTML = '<li class="empty">Nothing matches. Try fewer words.</li>';
+    return;
+  }
+
+  for(const p of shown){
+    const open = isOpenNow(p);
+    const li = document.createElement("li");
+    const days = p.hours.map((t,i) =>
+      `<div class="${i===todayIdx ? "today" : ""}"><dt>${DAYS[i]}</dt><dd>${t}</dd></div>`).join("");
+    li.innerHTML = `
+      <div class="top">
+        <h2 class="name">${p.place}</h2>
+        <span class="badge ${open ? "open" : "shut"}">${open ? "Open now" : "Closed now"}</span>
+        <span class="hood">${p.neighborhood}</span>
+      </div>
+      <p class="atmo">${p.atmosphere}</p>
+      <p class="addr"><a href="https://maps.google.com/?q=${encodeURIComponent(p.address + ", Cincinnati OH")}" target="_blank" rel="noopener">${p.address}</a></p>
+      <dl class="hours">${days}</dl>`;
+    list.appendChild(li);
+  }
+}
+
+const DATA = [
+ {
+  "place": "The 86",
+  "atmosphere": "college campus cozy two-floor",
+  "neighborhood": "Corryville",
+  "address": "2900 Jefferson Ave",
+  "hours": [
+   "7a\u20139p",
+   "7a\u20139p",
+   "7a\u20139p",
+   "7a\u20139p",
+   "7a\u20139p",
+   "8a\u20139p",
+   "2p\u20139p"
+  ]
+ },
+ {
+  "place": "513 Coffee",
+  "atmosphere": "small bright spot",
+  "neighborhood": "Covington",
+  "address": "324 W Pike St, Covington",
+  "hours": [
+   "6:30a\u20134p",
+   "6:30a\u20134p",
+   "6:30a\u20134p",
+   "6:30a\u20134p",
+   "6:30a\u20134p",
+   "7:30a\u20134p",
+   "7:30a\u20134p"
+  ]
+ },
+ {
+  "place": "1215 Coffee and Wine",
+  "atmosphere": "candlelit wine bar with patio",
+  "neighborhood": "Over-the-Rhine",
+  "address": "1215 Vine St",
+  "hours": [
+   "7:30a\u20138p",
+   "7:30a\u20138p",
+   "7:30a\u20138p",
+   "7:30a\u20138p",
+   "7:30a\u201310p",
+   "8a\u201310p",
+   "Closed"
+  ]
+ },
+ {
+  "place": "All\u00e9z Cafe (Madisonville)",
+  "atmosphere": "true old-bones beautiful caf\u00e9",
+  "neighborhood": "Madisonville",
+  "address": "6012 Madison Rd",
+  "hours": [
+   "Closed",
+   "8a\u20133p",
+   "8a\u20133p",
+   "8a\u20133p",
+   "8a\u20133p",
+   "8a\u20133p",
+   "Closed"
+  ]
+ },
+ {
+  "place": "Birdie's Coffee Co.",
+  "atmosphere": "moody remote worker hub",
+  "neighborhood": "Norwood",
+  "address": "4030 Forest Ave",
+  "hours": [
+   "6:30a\u20134p",
+   "6:30a\u20134p",
+   "6:30a\u20134p",
+   "6:30a\u20134p",
+   "6:30a\u20134p",
+   "8a\u20134p",
+   "8a\u20132:30p"
+  ]
+ },
+ {
+  "place": "Cincinnati Art Museum Cafe",
+  "atmosphere": "lunch crowd, courtyard pergola",
+  "neighborhood": "Mt. Adams",
+  "address": "953 Eden Park Dr",
+  "hours": [
+   "Closed",
+   "11a\u20133p",
+   "11a\u20133p",
+   "11a\u20137:30p",
+   "11a\u20133p",
+   "11a\u20133p",
+   "11a\u20133p"
+  ]
+ },
+ {
+  "place": "Cincinnati Art Museum Library",
+  "atmosphere": "modern library with terrace view",
+  "neighborhood": "Mt. Adams",
+  "address": "953 Eden Park Dr",
+  "hours": [
+   "Closed",
+   "11a\u20135p",
+   "11a\u20135p",
+   "11a\u20135p",
+   "11a\u20135p",
+   "2nd Sat only",
+   "Closed"
+  ]
+ },
+ {
+  "place": "Coffee Emporium (OTR)",
+  "atmosphere": "overhear local politics in a bunker",
+  "neighborhood": "Over-the-Rhine",
+  "address": "110 E Central Pkwy",
+  "hours": [
+   "6:30a\u20134p",
+   "6:30a\u20134p",
+   "6:30a\u20134p",
+   "6:30a\u20134p",
+   "6:30a\u20134p",
+   "7a\u20134p",
+   "7a\u20134p"
+  ]
+ },
+ {
+  "place": "Collective Espresso (OTR)",
+  "atmosphere": "bisexual bright hole-in-the-wall",
+  "neighborhood": "Over-the-Rhine",
+  "address": "207 Woodward St",
+  "hours": [
+   "7a\u20134p",
+   "7a\u20134p",
+   "7a\u20134p",
+   "7a\u20134p",
+   "7a\u20134p",
+   "8a\u20134p",
+   "8a\u20134p"
+  ]
+ },
+ {
+  "place": "Cora's All Day Cafe",
+  "atmosphere": "art deco hotel cafe",
+  "neighborhood": "Downtown",
+  "address": "600 Main St",
+  "hours": [
+   "6:30a\u20137p",
+   "6:30a\u20137p",
+   "6:30a\u20137p",
+   "6:30a\u20137p",
+   "6:30a\u20137p",
+   "6:30a\u20137p",
+   "6:30a\u20137p"
+  ]
+ },
+ {
+  "place": "Highland Coffee House",
+  "atmosphere": "kegs, coffee, and chalkboards",
+  "neighborhood": "Clifton",
+  "address": "2839 Highland Ave",
+  "hours": [
+   "3p\u20132:30a",
+   "3p\u20132:30a",
+   "3p\u20132:30a",
+   "3p\u20132:30a",
+   "3p\u20132:30a",
+   "1p\u20132:30a",
+   "1p\u20132:30a"
+  ]
+ },
+ {
+  "place": "Locke Coffee",
+  "atmosphere": "real-deal coffee in revamped old bank",
+  "neighborhood": "Newport",
+  "address": "400 York St, Newport",
+  "hours": [
+   "6:30a\u20133:30p",
+   "6:30a\u20133:30p",
+   "6:30a\u20133:30p",
+   "6:30a\u20133:30p",
+   "6:30a\u20133:30p",
+   "6:30a\u20133:30p",
+   "6:30a\u20133:30p"
+  ]
+ },
+ {
+  "place": "The Monarch House",
+  "atmosphere": "nookish overlook in hilltop flatiron",
+  "neighborhood": "Mt. Auburn",
+  "address": "1833 Sycamore St",
+  "hours": [
+   "7a\u20137p",
+   "7a\u20137p",
+   "7a\u20137p",
+   "7a\u20137p",
+   "7a\u20137p",
+   "7a\u20137p",
+   "Closed"
+  ]
+ },
+ {
+  "place": "The Porch @ Washington Park",
+  "atmosphere": "lively, covered outdoor park bar",
+  "neighborhood": "Over-the-Rhine",
+  "address": "1230 Elm St",
+  "hours": [
+   "N/A",
+   "N/A",
+   "N/A",
+   "N/A",
+   "N/A",
+   "N/A",
+   "N/A"
+  ]
+ },
+ {
+  "place": "Red Tree Coffee & Art (OTR)",
+  "atmosphere": "open space, white brick walls",
+  "neighborhood": "Over-the-Rhine",
+  "address": "229 W 12th St",
+  "hours": [
+   "8a\u20136p",
+   "8a\u20136p",
+   "8a\u20136p",
+   "8a\u201311p",
+   "8a\u201311p",
+   "8a\u201311p",
+   "8a\u201310p"
+  ]
+ },
+ {
+  "place": "Safi",
+  "atmosphere": "intimate after-hours wine lounge",
+  "neighborhood": "Over-the-Rhine",
+  "address": "1401 Republic St",
+  "hours": [
+   "Closed",
+   "Closed",
+   "4p\u201311p",
+   "4p\u201311p",
+   "4p\u201311p",
+   "4p\u201311p",
+   "2p\u20139p"
+  ]
+ },
+ {
+  "place": "Urbana Cafe",
+  "atmosphere": "peaceful multi-room,",
+  "neighborhood": "Pendleton",
+  "address": "1130 Broadway",
+  "hours": [
+   "7a\u20135p",
+   "7a\u20135p",
+   "7a\u20135p",
+   "7a\u20135p",
+   "7a\u20135p",
+   "8a\u20135p",
+   "8a\u20135p"
+  ]
+ }
+];
+
+places = DATA.sort((a,b) => a.place.localeCompare(b.place));
+for(const n of [...new Set(places.map(p => p.neighborhood))].sort()){
+  const o = document.createElement("option");
+  o.value = o.textContent = n;
+  hood.appendChild(o);
+}
+render();
+
+for(const el of [q, hood, now]) el.addEventListener("input", render);
+</script>
+</body>
+</html>
