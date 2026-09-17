@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Places to Remote Work — Board</title>
+<meta name="description" content="Weekly open-hours timetable for Cincinnati remote-work spots, 6am to 3am, with a live now-line.">
+<style>
+  :root{
+    --bg:#faf7f2; --panel:#fff; --line:#e6ded2; --ink:#241f1a; --muted:#7a6f62;
+    --accent:#b4531f; --open:#2f7a44; --openbg:#e6f2e9; --shut:#8a8178; --shutbg:#f0ece6;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#17140f; --panel:#201c16; --line:#332c23; --ink:#f2ece2; --muted:#a2988a;
+      --accent:#e3854a; --open:#7fd39a; --openbg:#1d2f23; --shut:#867c70; --shutbg:#262019;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#17140f; --panel:#201c16; --line:#332c23; --ink:#f2ece2; --muted:#a2988a;
+    --accent:#e3854a; --open:#7fd39a; --openbg:#1d2f23; --shut:#867c70; --shutbg:#262019;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font:16px/1.5 ui-serif, Georgia, "Iowan Old Style", serif;
+    -webkit-text-size-adjust:100%;
+  }
+  .wrap{max-width:1200px; margin:0 auto; padding:32px 16px 80px}
+  header h1{font-size:1.7rem; margin:0 0 4px; letter-spacing:-.01em}
+  header .sub{color:var(--muted); font-size:.9rem; margin:0}
+  header .sub strong{color:var(--ink); font-weight:600}
+
+  .legend{
+    display:flex; flex-wrap:wrap; gap:16px; align-items:center;
+    font-family:ui-sans-serif, system-ui, sans-serif; font-size:.76rem; color:var(--muted);
+    margin:18px 0 14px;
+  }
+  .legend .item{display:inline-flex; align-items:center; gap:6px}
+  .swatch{width:16px; height:10px; border-radius:2px; display:inline-block; flex:none}
+  .swatch.open{background:var(--open); opacity:.85}
+  .swatch.na{background: repeating-linear-gradient(45deg, var(--open) 0 4px, transparent 4px 8px); opacity:.6}
+  .swatch.rare{background: repeating-linear-gradient(45deg, var(--shut) 0 4px, transparent 4px 8px); opacity:.7}
+  .swatch.now{background:var(--accent); width:2px}
+
+  /* ---- board ---- */
+  --label-w: 168px;
+  --day-w: 22px;
+  --tl-w: 945px; /* 21 hours * 45px/hr -- must match JS TL_W */
+
+  .board-scroll{
+    overflow-x:auto; overflow-y:visible;
+    border:1px solid var(--line); border-radius:12px; background:var(--panel);
+    -webkit-overflow-scrolling:touch;
+  }
+  .board{
+    position:relative;
+    width: calc(168px + 22px + 945px);
+  }
+
+  .hour-row{display:flex; position:sticky; top:0; z-index:3; background:var(--panel); border-bottom:1px solid var(--line)}
+  .label-spacer{flex:0 0 168px; border-right:1px solid var(--line)}
+  .daycol-spacer{flex:0 0 22px; border-right:1px solid var(--line)}
+  .ticks{position:relative; flex:0 0 945px; height:26px; font-family:ui-sans-serif, system-ui, sans-serif; font-size:.7rem; color:var(--muted)}
+  .ticks span{position:absolute; top:6px}
+  .ticks span:last-child{transform:translateX(-100%)}
+
+  .place{display:flex; border-bottom:1px solid var(--line)}
+  .place:last-child{border-bottom:none}
+  .place-label{
+    flex:0 0 168px; position:sticky; left:0; z-index:2; background:var(--panel);
+    border-right:1px solid var(--line); padding:9px 10px;
+  }
+  .place-label .name{font-size:.9rem; font-weight:600; margin:0; line-height:1.25}
+  .place-label .hood{color:var(--accent); font-size:.7rem; margin:2px 0 0}
+  .place-label details{margin-top:5px; font-size:.72rem; color:var(--muted)}
+  .place-label summary{cursor:pointer; list-style:none; color:var(--muted); font-size:.7rem}
+  .place-label summary::-webkit-details-marker{display:none}
+  .place-label summary::before{content:"+ "}
+  .place-label details[open] summary::before{content:"– "}
+  .place-label .atmo{margin:4px 0 0; font-style:italic}
+  .place-label .addr{margin:4px 0 0}
+  .place-label .addr a{color:var(--muted)}
+  .place-label .fallback{margin:6px 0 0; padding:0; list-style:none; display:grid; grid-template-columns:1fr 1fr; gap:1px 8px}
+  .place-label .fallback li{display:flex; justify-content:space-between; gap:6px}
+  .place-label .fallback b{font-weight:600; color:var(--ink)}
+
+  .daycol{flex:0 0 22px; position:sticky; left:168px; z-index:2; background:var(--panel); border-right:1px solid var(--line)}
+  .daycol div{
+    height:19px; display:flex; align-items:center; justify-content:center;
+    font-family:ui-sans-serif, system-ui, sans-serif; font-size:.62rem; color:var(--muted);
+  }
+  .daycol div.today{color:var(--accent); font-weight:700}
+
+  .week{flex:0 0 945px}
+  .day{
+    position:relative; height:19px;
+    background-image: repeating-linear-gradient(to right, var(--line) 0 1px, transparent 1px 45px);
+    background-color: transparent;
+  }
+  .day + .day{border-top:1px solid var(--line)}
+  .day.today{background-color:var(--openbg)}
+  .bar{
+    position:absolute; top:2px; bottom:2px; border-radius:3px;
+    background:var(--open); opacity:.82;
+  }
+  .bar.special-na{
+    background: repeating-linear-gradient(45deg, var(--open) 0 5px, transparent 5px 10px);
+    opacity:.55; display:flex; align-items:center; padding-left:6px;
+  }
+  .bar.special-rare{
+    background: repeating-linear-gradient(45deg, var(--shut) 0 5px, transparent 5px 10px);
+    opacity:.65; display:flex; align-items:center; padding-left:6px;
+  }
+  .bar em{
+    font-style:normal; font-family:ui-sans-serif, system-ui, sans-serif; font-size:.62rem;
+    color:var(--ink); white-space:nowrap; background:var(--panel); padding:0 4px; border-radius:3px;
+  }
+
+  .now-line{position:absolute; top:0; bottom:0; width:2px; background:var(--accent); z-index:5; pointer-events:none}
+  .now-line::before{
+    content:"now"; position:absolute; top:-2px; left:4px;
+    font:.62rem/1 ui-sans-serif, system-ui, sans-serif; color:var(--accent); white-space:nowrap;
+  }
+
+  .hint{font-size:.78rem; color:var(--muted); margin:10px 2px 0}
+
+  @media (max-width:560px){
+    .wrap{padding:24px 12px 64px}
+    header h1{font-size:1.4rem}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Places to Remote Work — Board</h1>
+    <p class="sub" id="nowline-sub">Loading current time&hellip;</p>
+  </header>
+
+  <div class="legend">
+    <span class="item"><span class="swatch open"></span> open</span>
+    <span class="item"><span class="swatch na"></span> no fixed hours</span>
+    <span class="item"><span class="swatch rare"></span> irregular / limited</span>
+    <span class="item"><span class="swatch now"></span> now</span>
+    <span class="item">axis: 6:00a&ndash;3:00a, hidden dead zone 3a&ndash;6a</span>
+  </div>
+
+  <div class="board-scroll" id="board-scroll">
+    <div class="board" id="board"></div>
+  </div>
+
+  <p class="hint">Tap a place's "+" for atmosphere, address, and the exact hours behind each bar. Scroll the board sideways to see early morning or late night.</p>
+</div>
+
+<script>
+const DAYS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+const DAY_LETTERS = ["M","T","W","T","F","S","S"];
+
+// Axis: 6:00a (360 min) through 3:00a next day (1620 min) = 21 hours
+const AXIS_START = 360;
+const AXIS_END = 1620;
+const AXIS_LEN = AXIS_END - AXIS_START; // 1260
+const TL_W = 945; // px -- must match CSS --tl-w
+const LABEL_W = 168;
+const DAY_W = 22;
+const PX_PER_MIN = TL_W / AXIS_LEN;
+
+// "6:30a", "7p" -> minutes past midnight (same parsing as index.html)
+function toMinutes(t){
+  const m = /^(\d{1,2})(?::(\d{2}))?([ap])$/.exec(t.trim());
+  if(!m) return null;
+  let h = parseInt(m[1],10) % 12;
+  if(m[3] === "p") h += 12;
+  return h*60 + (m[2] ? parseInt(m[2],10) : 0);
+}
+
+function esc(s){
+  return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+
+// Classify one day's hours cell into a render spec.
+function classifyDay(text){
+  const t = text.trim();
+  if(t === "Closed") return {kind:"closed"};
+  if(t === "N/A") return {kind:"na"};
+  const parts = t.split(/[–-]/);
+  if(parts.length !== 2) return {kind:"irregular", label:t};
+  const a = toMinutes(parts[0]), b = toMinutes(parts[1]);
+  if(a === null || b === null) return {kind:"irregular", label:t};
+  const bAdj = b <= a ? b + 1440 : b; // past-midnight close
+  return {
+    kind:"open",
+    leftPx: (a - AXIS_START) * PX_PER_MIN,
+    widthPx: (bAdj - a) * PX_PER_MIN,
+    text: t
+  };
+}
+
+// Current time in America/New_York, mapped onto the 6a-3a axis.
+// Times before 6:00a belong visually to the PREVIOUS operating day
+// (matching how a late bar like Highland's spills across midnight).
+function nowInfo(){
+  const fmt = new Intl.DateTimeFormat("en-US", {
+    timeZone:"America/New_York", weekday:"short",
+    hour:"2-digit", minute:"2-digit", hourCycle:"h23"
+  });
+  const disp = new Intl.DateTimeFormat("en-US", {
+    timeZone:"America/New_York", weekday:"long",
+    hour:"numeric", minute:"2-digit"
+  });
+  const parts = Object.fromEntries(fmt.formatToParts(new Date()).map(p => [p.type, p.value]));
+  const wkMap = {Mon:0,Tue:1,Wed:2,Thu:3,Fri:4,Sat:5,Sun:6};
+  const calIdx = wkMap[parts.weekday];
+  const raw = parseInt(parts.hour,10)*60 + parseInt(parts.minute,10);
+
+  let opIdx = calIdx, axisRaw = raw;
+  if(raw < AXIS_START){
+    opIdx = (calIdx + 6) % 7;
+    axisRaw = raw + 1440;
+  }
+  const axisPos = axisRaw - AXIS_START;
+  return {
+    opIdx,
+    leftPx: axisPos * PX_PER_MIN,
+    display: disp.format(new Date()) + " ET"
+  };
+}
+
+const DATA = [
+ {
+  "place": "The 86",
+  "atmosphere": "college campus cozy two-floor",
+  "neighborhood": "Corryville",
+  "address": "2900 Jefferson Ave",
+  "hours": [
+   "7a–9p",
+   "7a–9p",
+   "7a–9p",
+   "7a–9p",
+   "7a–9p",
+   "8a–9p",
+   "2p–9p"
+  ]
+ },
+ {
+  "place": "513 Coffee",
+  "atmosphere": "small bright spot",
+  "neighborhood": "Covington",
+  "address": "324 W Pike St, Covington",
+  "hours": [
+   "6:30a–4p",
+   "6:30a–4p",
+   "6:30a–4p",
+   "6:30a–4p",
+   "6:30a–4p",
+   "7:30a–4p",
+   "7:30a–4p"
+  ]
+ },
+ {
+  "place": "1215 Coffee and Wine",
+  "atmosphere": "candlelit wine bar with patio",
+  "neighborhood": "Over-the-Rhine",
+  "address": "1215 Vine St",
+  "hours": [
+   "7:30a–8p",
+   "7:30a–8p",
+   "7:30a–8p",
+   "7:30a–8p",
+   "7:30a–10p",
+   "8a–10p",
+   "Closed"
+  ]
+ },
+ {
+  "place": "Alléz Cafe (Madisonville)",
+  "atmosphere": "beautiful revamped old-bones cafe",
+  "neighborhood": "Madisonville",
+  "address": "6012 Madison Rd",
+  "hours": [
+   "Closed",
+   "8a–3p",
+   "8a–3p",
+   "8a–3p",
+   "8a–3p",
+   "8a–3p",
+   "Closed"
+  ]
+ },
+ {
+  "place": "Birdie's Coffee Co.",
+  "atmosphere": "moody remote worker hub",
+  "neighborhood": "Norwood",
+  "address": "4030 Forest Ave",
+  "hours": [
+   "6:30a–4p",
+   "6:30a–4p",
+   "6:30a–4p",
+   "6:30a–4p",
+   "6:30a–4p",
+   "8a–4p",
+   "8a–2:30p"
+  ]
+ },
+ {
+  "place": "Cincinnati Art Museum Cafe",
+  "atmosphere": "lunch crowd, courtyard pergola",
+  "neighborhood": "Mt. Adams",
+  "address": "953 Eden Park Dr",
+  "hours": [
+   "Closed",
+   "11a–3p",
+   "11a–3p",
+   "11a–7:30p",
+   "11a–3p",
+   "11a–3p",
+   "11a–3p"
+  ]
+ },
+ {
+  "place": "Cincinnati Art Museum Library",
+  "atmosphere": "modern library with terrace view",
+  "neighborhood": "Mt. Adams",
+  "address": "953 Eden Park Dr",
+  "hours": [
+   "Closed",
+   "11a–5p",
+   "11a–5p",
+   "11a–5p",
+   "11a–5p",
+   "2nd Sat only",
+   "Closed"
+  ]
+ },
+ {
+  "place": "Coffee Emporium (OTR)",
+  "atmosphere": "overhear local politics in a bunker",
+  "neighborhood": "Over-the-Rhine",
+  "address": "110 E Central Pkwy",
+  "hours": [
+   "6:30a–4p",
+   "6:30a–4p",
+   "6:30a–4p",
+   "6:30a–4p",
+   "6:30a–4p",
+   "7a–4p",
+   "7a–4p"
+  ]
+ },
+ {
+  "place": "Collective Espresso (OTR)",
+  "atmosphere": "bisexual bright hole-in-the-wall",
+  "neighborhood": "Over-the-Rhine",
+  "address": "207 Woodward St",
+  "hours": [
+   "7a–4p",
+   "7a–4p",
+   "7a–4p",
+   "7a–4p",
+   "7a–4p",
+   "8a–4p",
+   "8a–4p"
+  ]
+ },
+ {
+  "place": "Cora's All Day Cafe",
+  "atmosphere": "art deco hotel cafe",
+  "neighborhood": "Downtown",
+  "address": "600 Main St",
+  "hours": [
+   "6:30a–7p",
+   "6:30a–7p",
+   "6:30a–7p",
+   "6:30a–7p",
+   "6:30a–7p",
+   "6:30a–7p",
+   "6:30a–7p"
+  ]
+ },
+ {
+  "place": "Highland Coffee House",
+  "atmosphere": "kegs, coffee, and chalkboards",
+  "neighborhood": "Clifton",
+  "address": "2839 Highland Ave",
+  "hours": [
+   "3p–2:30a",
+   "3p–2:30a",
+   "3p–2:30a",
+   "3p–2:30a",
+   "3p–2:30a",
+   "1p–2:30a",
+   "1p–2:30a"
+  ]
+ },
+ {
+  "place": "Locke Coffee",
+  "atmosphere": "real-deal coffee in revamped old bank",
+  "neighborhood": "Newport",
+  "address": "400 York St, Newport",
+  "hours": [
+   "6:30a–3:30p",
+   "6:30a–3:30p",
+   "6:30a–3:30p",
+   "6:30a–3:30p",
+   "6:30a–3:30p",
+   "6:30a–3:30p",
+   "6:30a–3:30p"
+  ]
+ },
+ {
+  "place": "The Monarch House",
+  "atmosphere": "nookish overlook in hilltop flatiron",
+  "neighborhood": "Mt. Auburn",
+  "address": "1833 Sycamore St",
+  "hours": [
+   "7a–7p",
+   "7a–7p",
+   "7a–7p",
+   "7a–7p",
+   "7a–7p",
+   "7a–7p",
+   "Closed"
+  ]
+ },
+ {
+  "place": "The Porch @ Washington Park",
+  "atmosphere": "lively, covered outdoor park bar",
+  "neighborhood": "Over-the-Rhine",
+  "address": "1230 Elm St",
+  "hours": [
+   "N/A",
+   "N/A",
+   "N/A",
+   "N/A",
+   "N/A",
+   "N/A",
+   "N/A"
+  ]
+ },
+ {
+  "place": "Red Tree Coffee & Art (OTR)",
+  "atmosphere": "open space, white brick walls",
+  "neighborhood": "Over-the-Rhine",
+  "address": "229 W 12th St",
+  "hours": [
+   "8a–6p",
+   "8a–6p",
+   "8a–6p",
+   "8a–11p",
+   "8a–11p",
+   "8a–11p",
+   "8a–10p"
+  ]
+ },
+ {
+  "place": "Safi",
+  "atmosphere": "intimate after-hours wine lounge",
+  "neighborhood": "Over-the-Rhine",
+  "address": "1401 Republic St",
+  "hours": [
+   "Closed",
+   "Closed",
+   "4p–11p",
+   "4p–11p",
+   "4p–11p",
+   "4p–11p",
+   "2p–9p"
+  ]
+ },
+ {
+  "place": "Urbana Cafe",
+  "atmosphere": "peaceful multi-room,",
+  "neighborhood": "Pendleton",
+  "address": "1130 Broadway",
+  "hours": [
+   "7a–5p",
+   "7a–5p",
+   "7a–5p",
+   "7a–5p",
+   "7a–5p",
+   "8a–5p",
+   "8a–5p"
+  ]
+ }
+];
+
+const places = DATA.slice().sort((a,b) => a.place.localeCompare(b.place));
+const ni = nowInfo();
+
+document.getElementById("nowline-sub").innerHTML =
+  `Now: <strong>${esc(ni.display)}</strong> &mdash; the accent line below marks this moment on every row.`;
+
+const TICKS = ["6a","9a","12p","3p","6p","9p","12a","3a"];
+let html = `<div class="hour-row">
+  <div class="label-spacer"></div>
+  <div class="daycol-spacer"></div>
+  <div class="ticks">${TICKS.map((l,i) => `<span style="left:${i*135}px">${l}</span>`).join("")}</div>
+</div>`;
+
+for(const p of places){
+  const dayLetters = DAY_LETTERS.map((l,i) =>
+    `<div class="${i === ni.opIdx ? "today" : ""}">${l}</div>`).join("");
+
+  const rows = p.hours.map((h,i) => {
+    const spec = classifyDay(h);
+    const today = i === ni.opIdx ? " today" : "";
+    let inner = "";
+    if(spec.kind === "open"){
+      inner = `<span class="bar" style="left:${spec.leftPx}px;width:${spec.widthPx}px" title="${esc(DAYS[i])} ${esc(spec.text)}"></span>`;
+    } else if(spec.kind === "na"){
+      inner = `<span class="bar special-na" style="left:0;width:${TL_W}px" title="${esc(DAYS[i])}: no fixed hours"><em>no fixed hours</em></span>`;
+    } else if(spec.kind === "irregular"){
+      inner = `<span class="bar special-rare" style="left:0;width:${TL_W}px" title="${esc(DAYS[i])}: ${esc(spec.label)}"><em>${esc(spec.label)}</em></span>`;
+    }
+    return `<div class="day${today}">${inner}</div>`;
+  }).join("");
+
+  const fallback = p.hours.map((h,i) => `<li><span>${DAYS[i]}</span> <b>${esc(h)}</b></li>`).join("");
+
+  html += `<section class="place">
+    <div class="place-label">
+      <p class="name">${esc(p.place)}</p>
+      <p class="hood">${esc(p.neighborhood)}</p>
+      <details>
+        <summary>details</summary>
+        <p class="atmo">${esc(p.atmosphere)}</p>
+        <p class="addr"><a href="https://maps.google.com/?q=${encodeURIComponent(p.address + ", Cincinnati OH")}" target="_blank" rel="noopener">${esc(p.address)}</a></p>
+        <ul class="fallback">${fallback}</ul>
+      </details>
+    </div>
+    <div class="daycol">${dayLetters}</div>
+    <div class="week">${rows}</div>
+  </section>`;
+}
+
+const board = document.getElementById("board");
+board.innerHTML = html;
+
+const line = document.createElement("div");
+line.className = "now-line";
+const lineLeft = LABEL_W + DAY_W + ni.leftPx;
+line.style.left = lineLeft + "px";
+board.appendChild(line);
+
+const scrollEl = document.getElementById("board-scroll");
+requestAnimationFrame(() => {
+  const target = lineLeft - scrollEl.clientWidth / 2;
+  scrollEl.scrollLeft = Math.max(0, target);
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Places to Remote Work — Minimal</title>
+<meta name="description" content="Cincinnati remote-work spots, auto-sorted by what's open right now. No controls.">
+<style>
+  :root{
+    --bg:#faf7f2; --panel:#fff; --line:#e6ded2; --ink:#241f1a; --muted:#7a6f62;
+    --accent:#b4531f; --open:#2f7a44; --openbg:#e6f2e9; --shut:#8a8178; --shutbg:#f0ece6;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#17140f; --panel:#201c16; --line:#332c23; --ink:#f2ece2; --muted:#a2988a;
+      --accent:#e3854a; --open:#7fd39a; --openbg:#1d2f23; --shut:#867c70; --shutbg:#262019;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#17140f; --panel:#201c16; --line:#332c23; --ink:#f2ece2; --muted:#a2988a;
+    --accent:#e3854a; --open:#7fd39a; --openbg:#1d2f23; --shut:#867c70; --shutbg:#262019;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font:16px/1.5 ui-serif, Georgia, "Iowan Old Style", serif;
+    -webkit-text-size-adjust:100%;
+  }
+  .wrap{max-width:1040px; margin:0 auto; padding:40px 16px 80px}
+  header{margin-bottom:8px}
+  h1{font-size:2rem; margin:0 0 6px; letter-spacing:-.01em}
+  .status{color:var(--muted); font-size:.9rem; margin:0 0 8px}
+  h2.tier{
+    font-family:ui-sans-serif, system-ui, sans-serif; font-size:.78rem; letter-spacing:.08em;
+    text-transform:uppercase; margin:0 0 12px; padding-top:24px; border-top:1px solid var(--line);
+  }
+  section:first-of-type h2.tier{border-top:none; padding-top:8px}
+  h2.tier.open-h{color:var(--open)}
+  h2.tier.later-h{color:var(--accent)}
+  h2.tier.closed-h{color:var(--shut)}
+  ul{list-style:none; margin:0; padding:0; display:grid; gap:12px}
+  li{
+    background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:16px 18px;
+  }
+  .top{display:flex; flex-wrap:wrap; align-items:baseline; gap:10px}
+  .name{font-size:1.15rem; font-weight:600; margin:0}
+  .note{
+    font-family:ui-sans-serif, system-ui, sans-serif; font-size:.72rem; letter-spacing:.03em;
+    color:var(--accent); white-space:nowrap;
+  }
+  .hood{color:var(--accent); font-size:.9rem}
+  .atmo{margin:6px 0 0; color:var(--ink)}
+  .addr{margin:4px 0 0; font-size:.9rem}
+  .addr a{color:var(--muted)}
+  .hours{
+    margin:12px 0 0; padding:0; display:grid; grid-template-columns:repeat(7,1fr); gap:4px;
+    font-family:ui-sans-serif, system-ui, sans-serif; font-size:.74rem; text-align:center;
+  }
+  .hours div{border:1px solid var(--line); border-radius:6px; padding:5px 2px; color:var(--muted)}
+  .hours div.today{border-color:var(--accent); color:var(--ink)}
+  .hours dt{font-weight:600; letter-spacing:.03em}
+  .hours dd{margin:2px 0 0}
+  .closed-list{list-style:none; margin:0; padding:0; display:grid; gap:7px}
+  .closed-list li{
+    background:none; border:none; padding:0; font-size:.9rem; color:var(--muted); border-radius:0;
+  }
+  .closed-list .cname{color:var(--ink); font-weight:600}
+  .closed-list .chood{color:var(--accent)}
+  .footnote{margin-top:32px; padding-top:16px; border-top:1px solid var(--line); font-size:.85rem; color:var(--muted)}
+  @media (max-width:560px){
+    .wrap{padding-top:28px}
+    h1{font-size:1.5rem}
+    .hours{grid-template-columns:repeat(4,1fr)}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Places to Remote Work — Minimal</h1>
+    <p class="status" id="status"></p>
+  </header>
+
+  <div id="content"></div>
+
+  <p class="footnote" id="footnote"></p>
+</div>
+
+<script>
+const DAYS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+
+// "6:30a", "7p" -> minutes past midnight
+function toMinutes(t){
+  const m = /^(\d{1,2})(?::(\d{2}))?([ap])$/.exec(t.trim());
+  if(!m) return null;
+  let h = parseInt(m[1],10) % 12;
+  if(m[3] === "p") h += 12;
+  return h*60 + (m[2] ? parseInt(m[2],10) : 0);
+}
+
+// "7a–9p" -> {a,b,spans}; null if not a plain two-time range (e.g. "Closed", "N/A", "2nd Sat only")
+function parseRange(text){
+  const parts = text.split(/[–-]/);
+  if(parts.length !== 2) return null;
+  const a = toMinutes(parts[0]), b = toMinutes(parts[1]);
+  if(a === null || b === null) return null;
+  return { a, b, spans: b < a }; // spans === past midnight
+}
+
+// Cincinnati "now", hardcoded to America/New_York regardless of the viewer's own clock/timezone
+function nowInCincinnati(){
+  const fmt = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York", weekday: "short",
+    hour: "2-digit", minute: "2-digit", hourCycle: "h23"
+  });
+  const parts = Object.fromEntries(fmt.formatToParts(new Date()).map(p => [p.type, p.value]));
+  const idx = DAYS.indexOf(parts.weekday);
+  const min = parseInt(parts.hour, 10) * 60 + parseInt(parts.minute, 10);
+  return { idx, min };
+}
+
+function fmtClock(min){
+  min = ((min % 1440) + 1440) % 1440;
+  let h = Math.floor(min/60), m = min%60;
+  const ap = h >= 12 ? "pm" : "am";
+  h = h % 12; if(h === 0) h = 12;
+  return `${h}:${String(m).padStart(2,"0")}${ap}`;
+}
+
+function fmtDur(min){
+  const h = Math.floor(min/60), m = min%60;
+  if(h === 0) return `${m} min`;
+  if(m === 0) return `${h}h`;
+  return `${h}h ${m}m`;
+}
+
+// Classify one place against "now": open (with remaining minutes), later-today (with wait),
+// or closed-today (with the next day/time it opens, searched forward up to 6 days).
+function classify(place, idx, min){
+  const today = parseRange(place.hours[idx]);
+  const yestIdx = (idx + 6) % 7;
+  const yest = parseRange(place.hours[yestIdx]);
+
+  // still open from last night's overnight window spilling into this morning
+  if(yest && yest.spans && min < yest.b){
+    return { status: "open", remaining: yest.b - min };
+  }
+  if(today){
+    if(!today.spans && min >= today.a && min < today.b){
+      return { status: "open", remaining: today.b - min };
+    }
+    if(today.spans && min >= today.a){
+      return { status: "open", remaining: (1440 - min) + today.b };
+    }
+    if(min < today.a){
+      return { status: "later", wait: today.a - min, at: today.a };
+    }
+  }
+  for(let d = 1; d <= 6; d++){
+    const j = (idx + d) % 7;
+    const r = parseRange(place.hours[j]);
+    if(r){ return { status: "closed", nextDay: DAYS[j], nextAt: r.a }; }
+  }
+  return { status: "closed", nextDay: null, nextAt: null };
+}
+
+const DATA = [
+ {
+  "place": "The 86",
+  "atmosphere": "college campus cozy two-floor",
+  "neighborhood": "Corryville",
+  "address": "2900 Jefferson Ave",
+  "hours": [
+   "7a–9p",
+   "7a–9p",
+   "7a–9p",
+   "7a–9p",
+   "7a–9p",
+   "8a–9p",
+   "2p–9p"
+  ]
+ },
+ {
+  "place": "513 Coffee",
+  "atmosphere": "small bright spot",
+  "neighborhood": "Covington",
+  "address": "324 W Pike St, Covington",
+  "hours": [
+   "6:30a–4p",
+   "6:30a–4p",
+   "6:30a–4p",
+   "6:30a–4p",
+   "6:30a–4p",
+   "7:30a–4p",
+   "7:30a–4p"
+  ]
+ },
+ {
+  "place": "1215 Coffee and Wine",
+  "atmosphere": "candlelit wine bar with patio",
+  "neighborhood": "Over-the-Rhine",
+  "address": "1215 Vine St",
+  "hours": [
+   "7:30a–8p",
+   "7:30a–8p",
+   "7:30a–8p",
+   "7:30a–8p",
+   "7:30a–10p",
+   "8a–10p",
+   "Closed"
+  ]
+ },
+ {
+  "place": "Alléz Cafe (Madisonville)",
+  "atmosphere": "beautiful revamped old-bones cafe",
+  "neighborhood": "Madisonville",
+  "address": "6012 Madison Rd",
+  "hours": [
+   "Closed",
+   "8a–3p",
+   "8a–3p",
+   "8a–3p",
+   "8a–3p",
+   "8a–3p",
+   "Closed"
+  ]
+ },
+ {
+  "place": "Birdie's Coffee Co.",
+  "atmosphere": "moody remote worker hub",
+  "neighborhood": "Norwood",
+  "address": "4030 Forest Ave",
+  "hours": [
+   "6:30a–4p",
+   "6:30a–4p",
+   "6:30a–4p",
+   "6:30a–4p",
+   "6:30a–4p",
+   "8a–4p",
+   "8a–2:30p"
+  ]
+ },
+ {
+  "place": "Cincinnati Art Museum Cafe",
+  "atmosphere": "lunch crowd, courtyard pergola",
+  "neighborhood": "Mt. Adams",
+  "address": "953 Eden Park Dr",
+  "hours": [
+   "Closed",
+   "11a–3p",
+   "11a–3p",
+   "11a–7:30p",
+   "11a–3p",
+   "11a–3p",
+   "11a–3p"
+  ]
+ },
+ {
+  "place": "Cincinnati Art Museum Library",
+  "atmosphere": "modern library with terrace view",
+  "neighborhood": "Mt. Adams",
+  "address": "953 Eden Park Dr",
+  "hours": [
+   "Closed",
+   "11a–5p",
+   "11a–5p",
+   "11a–5p",
+   "11a–5p",
+   "2nd Sat only",
+   "Closed"
+  ]
+ },
+ {
+  "place": "Coffee Emporium (OTR)",
+  "atmosphere": "overhear local politics in a bunker",
+  "neighborhood": "Over-the-Rhine",
+  "address": "110 E Central Pkwy",
+  "hours": [
+   "6:30a–4p",
+   "6:30a–4p",
+   "6:30a–4p",
+   "6:30a–4p",
+   "6:30a–4p",
+   "7a–4p",
+   "7a–4p"
+  ]
+ },
+ {
+  "place": "Collective Espresso (OTR)",
+  "atmosphere": "bisexual bright hole-in-the-wall",
+  "neighborhood": "Over-the-Rhine",
+  "address": "207 Woodward St",
+  "hours": [
+   "7a–4p",
+   "7a–4p",
+   "7a–4p",
+   "7a–4p",
+   "7a–4p",
+   "8a–4p",
+   "8a–4p"
+  ]
+ },
+ {
+  "place": "Cora's All Day Cafe",
+  "atmosphere": "art deco hotel cafe",
+  "neighborhood": "Downtown",
+  "address": "600 Main St",
+  "hours": [
+   "6:30a–7p",
+   "6:30a–7p",
+   "6:30a–7p",
+   "6:30a–7p",
+   "6:30a–7p",
+   "6:30a–7p",
+   "6:30a–7p"
+  ]
+ },
+ {
+  "place": "Highland Coffee House",
+  "atmosphere": "kegs, coffee, and chalkboards",
+  "neighborhood": "Clifton",
+  "address": "2839 Highland Ave",
+  "hours": [
+   "3p–2:30a",
+   "3p–2:30a",
+   "3p–2:30a",
+   "3p–2:30a",
+   "3p–2:30a",
+   "1p–2:30a",
+   "1p–2:30a"
+  ]
+ },
+ {
+  "place": "Locke Coffee",
+  "atmosphere": "real-deal coffee in revamped old bank",
+  "neighborhood": "Newport",
+  "address": "400 York St, Newport",
+  "hours": [
+   "6:30a–3:30p",
+   "6:30a–3:30p",
+   "6:30a–3:30p",
+   "6:30a–3:30p",
+   "6:30a–3:30p",
+   "6:30a–3:30p",
+   "6:30a–3:30p"
+  ]
+ },
+ {
+  "place": "The Monarch House",
+  "atmosphere": "nookish overlook in hilltop flatiron",
+  "neighborhood": "Mt. Auburn",
+  "address": "1833 Sycamore St",
+  "hours": [
+   "7a–7p",
+   "7a–7p",
+   "7a–7p",
+   "7a–7p",
+   "7a–7p",
+   "7a–7p",
+   "Closed"
+  ]
+ },
+ {
+  "place": "The Porch @ Washington Park",
+  "atmosphere": "lively, covered outdoor park bar",
+  "neighborhood": "Over-the-Rhine",
+  "address": "1230 Elm St",
+  "hours": [
+   "N/A",
+   "N/A",
+   "N/A",
+   "N/A",
+   "N/A",
+   "N/A",
+   "N/A"
+  ]
+ },
+ {
+  "place": "Red Tree Coffee & Art (OTR)",
+  "atmosphere": "open space, white brick walls",
+  "neighborhood": "Over-the-Rhine",
+  "address": "229 W 12th St",
+  "hours": [
+   "8a–6p",
+   "8a–6p",
+   "8a–6p",
+   "8a–11p",
+   "8a–11p",
+   "8a–11p",
+   "8a–10p"
+  ]
+ },
+ {
+  "place": "Safi",
+  "atmosphere": "intimate after-hours wine lounge",
+  "neighborhood": "Over-the-Rhine",
+  "address": "1401 Republic St",
+  "hours": [
+   "Closed",
+   "Closed",
+   "4p–11p",
+   "4p–11p",
+   "4p–11p",
+   "4p–11p",
+   "2p–9p"
+  ]
+ },
+ {
+  "place": "Urbana Cafe",
+  "atmosphere": "peaceful multi-room,",
+  "neighborhood": "Pendleton",
+  "address": "1130 Broadway",
+  "hours": [
+   "7a–5p",
+   "7a–5p",
+   "7a–5p",
+   "7a–5p",
+   "7a–5p",
+   "8a–5p",
+   "8a–5p"
+  ]
+ }
+];
+
+const NOW = nowInCincinnati();
+
+const porch = DATA.find(p => p.hours.every(h => h === "N/A"));
+const real = DATA.filter(p => p !== porch);
+
+const openNow = [], later = [], closed = [];
+for(const p of real){
+  const c = classify(p, NOW.idx, NOW.min);
+  if(c.status === "open") openNow.push({ p, ...c });
+  else if(c.status === "later") later.push({ p, ...c });
+  else closed.push({ p, ...c });
+}
+openNow.sort((a,b) => b.remaining - a.remaining);   // most runway first
+later.sort((a,b) => a.wait - b.wait);               // soonest opening first
+closed.sort((a,b) => a.p.place.localeCompare(b.p.place));
+
+document.getElementById("status").textContent =
+  `${openNow.length} open right now · ${DAYS[NOW.idx]} ${fmtClock(NOW.min)}`;
+
+function hoursStrip(p){
+  return p.hours.map((t,i) =>
+    `<div class="${i===NOW.idx ? "today" : ""}"><dt>${DAYS[i]}</dt><dd>${t}</dd></div>`).join("");
+}
+
+function card(entry, note){
+  const p = entry.p;
+  return `<li>
+    <div class="top">
+      <h3 class="name">${p.place}</h3>
+      ${note ? `<span class="note">${note}</span>` : ""}
+      <span class="hood">${p.neighborhood}</span>
+    </div>
+    <p class="atmo">${p.atmosphere}</p>
+    <p class="addr"><a href="https://maps.google.com/?q=${encodeURIComponent(p.address + ", Cincinnati OH")}" target="_blank" rel="noopener">${p.address}</a></p>
+    <dl class="hours">${hoursStrip(p)}</dl>
+  </li>`;
+}
+
+let html = "";
+
+if(openNow.length){
+  html += `<section><h2 class="tier open-h">Open now</h2><ul>`;
+  html += openNow.map(e => card(e, e.remaining < 60 ? `closes in ${fmtDur(e.remaining)}` : "")).join("");
+  html += `</ul></section>`;
+}
+
+if(later.length){
+  html += `<section><h2 class="tier later-h">Opening later today</h2><ul>`;
+  html += later.map(e => card(e, `opens in ${fmtDur(e.wait)} · ${fmtClock(e.at)}`)).join("");
+  html += `</ul></section>`;
+}
+
+if(closed.length){
+  html += `<section><h2 class="tier closed-h">Closed today</h2><ul class="closed-list">`;
+  html += closed.map(e => {
+    const next = e.nextDay ? `opens ${e.nextDay} ${fmtClock(e.nextAt)}` : "hours unclear";
+    return `<li><span class="cname">${e.p.place}</span> — <span class="chood">${e.p.neighborhood}</span> — ${next}</li>`;
+  }).join("");
+  html += `</ul></section>`;
+}
+
+document.getElementById("content").innerHTML = html;
+
+if(porch){
+  document.getElementById("footnote").innerHTML =
+    `<strong>${porch.place}</strong> (${porch.neighborhood}) has no listed hours — not sorted into any tier above. ${porch.atmosphere}.`;
+}
+</script>
+</body>
+</html>
